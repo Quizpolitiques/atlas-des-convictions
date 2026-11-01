@@ -804,12 +804,17 @@ function renderIntro() {
 
 const unanswered = () => QUESTIONS.filter(q => state.answers[q.id] === undefined).length;
 function startQuiz(onlyNew) {
-  state.onlyNew = !!onlyNew && unanswered() > 0;
+  state.onlyNew = !!onlyNew && unanswered() > 0; trail = []; ahead = [];
   const first = QUESTIONS.findIndex(q => state.answers[q.id] === undefined);
   state.idx = first < 0 ? 0 : first; state.view = "quiz"; state.sim = null; save(); render(); window.scrollTo(0, 0);
 }
+// En mode « compléter », la piste garde les affirmations vues pendant la séance, pour que
+// « Précédente » y revienne même après y avoir répondu.
+let trail = [], ahead = [];
 function nextIndex(d) {
   if (!state.onlyNew) return Math.max(0, Math.min(QUESTIONS.length - 1, state.idx + d));
+  if (d < 0 && trail.length) return trail[trail.length - 1];
+  if (d > 0 && ahead.length) return ahead[ahead.length - 1];
   for (let i = state.idx + d; i >= 0 && i < QUESTIONS.length; i += d) if (state.answers[QUESTIONS[i].id] === undefined) return i;
   return -1;
 }
@@ -857,7 +862,7 @@ function renderQuiz() {
   document.getElementById("next").onclick = () => go(1);
   document.getElementById("res").onclick = () => { state.view = n >= 45 ? "results" : "intro"; state.sim = null; render(); window.scrollTo(0, 0); };
   const mt = document.getElementById("modeToggle");
-  if (mt) { if (!mt.textContent) mt.hidden = true; mt.onclick = () => { if (state.onlyNew) { state.onlyNew = false; save(); renderQuiz(); } else startQuiz(true); }; }
+  if (mt) { if (!mt.textContent) mt.hidden = true; mt.onclick = () => { if (state.onlyNew) { state.onlyNew = false; trail = []; ahead = []; save(); renderQuiz(); } else startQuiz(true); }; }
 }
 let advanceTimer = null;
 function answer(v) {
@@ -868,13 +873,20 @@ function answer(v) {
   advanceTimer = setTimeout(() => {
     if (state.view !== "quiz") return;
     const nx = nextIndex(1);
-    if (nx >= 0) { state.idx = nx; save(); renderQuiz(); }
-    else if (state.onlyNew && unanswered()) { state.idx = QUESTIONS.findIndex(q => state.answers[q.id] === undefined); save(); renderQuiz(); }
+    if (nx >= 0) { if (state.onlyNew) { if (ahead.length && ahead[ahead.length - 1] === nx) ahead.pop(); trail.push(state.idx); } state.idx = nx; save(); renderQuiz(); }
+    else if (state.onlyNew && unanswered()) { trail.push(state.idx); state.idx = QUESTIONS.findIndex(q => state.answers[q.id] === undefined); save(); renderQuiz(); }
     else { state.onlyNew = false; state.view = "results"; save(); render(); window.scrollTo(0, 0); }
   }, 220);
 }
 function toggleStar() { const q = QUESTIONS[state.idx]; if (state.stars[q.id]) delete state.stars[q.id]; else state.stars[q.id] = true; save(); renderQuiz(); }
-function go(d) { clearTimeout(advanceTimer); const nx = nextIndex(d); if (nx >= 0) { state.idx = nx; save(); renderQuiz(); } }
+function go(d) {
+  clearTimeout(advanceTimer); const nx = nextIndex(d); if (nx < 0) return;
+  if (state.onlyNew) {
+    if (d < 0 && trail.length && trail[trail.length - 1] === nx) { trail.pop(); ahead.push(state.idx); }
+    else if (d > 0) { if (ahead.length && ahead[ahead.length - 1] === nx) ahead.pop(); trail.push(state.idx); }
+  }
+  state.idx = nx; save(); renderQuiz();
+}
 document.addEventListener("keydown", e => {
   if (state.view !== "quiz" || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key >= "1" && e.key <= "7") { answer(SCALE[+e.key - 1][0]); e.preventDefault(); }
