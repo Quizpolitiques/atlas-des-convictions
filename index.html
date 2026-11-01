@@ -90,6 +90,10 @@ button:focus-visible, summary:focus-visible, select:focus-visible { outline: 2px
 details.aide { font-size: 0.9rem; color: var(--muted); }
 details.aide summary { cursor: pointer; color: var(--accent); font-weight: 500; }
 details.aide p { margin-top: 6px; }
+.amisbox { border: 2px solid var(--danger); border-radius: 12px; padding: 16px 18px; background: var(--surface); display: grid; gap: 10px; }
+.amisbox h3 { color: var(--danger); font-weight: 700; font-size: 1.15rem; margin: 0; }
+.amisbox ol { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
+.btn.amis-cta { border: 2px solid var(--danger); color: var(--danger); background: transparent; font-weight: 700; text-decoration: none; justify-self: start; }
 .scale { display: grid; gap: 10px; }
 .dots { display: grid; grid-template-columns: repeat(7, 1fr); align-items: center; justify-items: center; gap: 4px; }
 .dot {
@@ -900,9 +904,10 @@ let COMPARABLES = comparables();
 function amisHTML(simEntry) {
   const amis = loadAmis();
   const list = amis.length ? `<div class="amis">${amis.map((a, k) => `<span class="ami"><b>${esc(a.pseudo)}</b> <button class="btn quiet small" data-amicmp="ami:${k}">Comparer</button><button class="btn quiet small" data-amidel="${k}" title="Retirer">×</button></span>`).join("")}</div>` : "";
-  return `<details class="aide" ${state.amisOpen ? "open" : ""} id="amisBox"><summary>Comparer avec un proche</summary>
-    <div style="display:grid;gap:10px;margin-top:10px">
-      <p class="small muted">Chacun garde ses réponses dans son propre navigateur. Pour vous comparer, l'un copie son code de partage et l'envoie à l'autre, qui le colle ici avec un prénom ou un pseudo. Le code ne contient que les réponses, rien d'autre.</p>
+  return `<div class="amisbox" id="amisBox"><h3>Comparer vos résultats avec un proche</h3>
+    <div style="display:grid;gap:10px">
+      <ol class="small"><li>Chacun copie son code de partage (bouton ci-dessous) et l'envoie à l'autre, par message ou par courriel.</li><li>Collez ici le code reçu, avec un prénom ou un pseudo, puis cliquez sur « Ajouter ».</li></ol>
+      <p class="small muted">Chacun garde ses réponses dans son propre navigateur ; le code ne contient que les réponses, rien d'autre.</p>
       ${simEntry ? "" : `<div class="row"><button class="btn quiet" id="copyCode">Copier mon code de partage</button><button class="btn quiet small" id="showCode">Afficher le code</button></div><div id="codeBox" hidden><textarea readonly rows="3" style="width:100%;font:inherit;font-size:0.8rem;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink)"></textarea></div>`}
       <div class="row" style="align-items:stretch">
         <input id="amiPseudo" placeholder="Prénom ou pseudo" maxlength="40" style="font:inherit;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);flex:0 1 180px">
@@ -911,7 +916,7 @@ function amisHTML(simEntry) {
       </div>
       <p class="small" id="amiMsg" style="color:var(--danger)"></p>
       ${list}
-    </div></details>`;
+    </div></div>`;
 }
 function compareHTML(prof, simEntry) {
   COMPARABLES = comparables();
@@ -937,9 +942,9 @@ function compareHTML(prof, simEntry) {
   }
   return `<section id="comparer" style="display:grid;gap:12px">
     <div class="section-head"><h2>Comparer</h2></div>
+    ${amisHTML(simEntry)}
     <input id="cmpIn" list="cmpList" placeholder="Rechercher : de Gaulle, Parti travailliste, Gaullisme…" value="${sel ? esc(sel.label) : ""}" autocomplete="off" style="font:inherit;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);width:100%">
     <datalist id="cmpList">${opts}</datalist>
-    ${amisHTML(simEntry)}
     ${body}
   </section>`;
 }
@@ -1036,6 +1041,7 @@ function renderResults() {
     <p class="eyebrow">${simEntry ? "Profil simulé" : "Vos résultats"}</p>
     <h1>${simEntry ? esc(simEntry.nom) : "Votre position"}</h1>
     <p class="lede">${simEntry ? esc(simEntry.description) : `Calculé sur ${expr} réponse${expr > 1 ? "s" : ""} exprimée${expr > 1 ? "s" : ""}${nx ? `, ${nx} sans avis` : ""}${nr ? `, ${nr} récusée${nr > 1 ? "s" : ""}` : ""}${n < QUESTIONS.length ? ` ; ${QUESTIONS.length - n} affirmation${QUESTIONS.length - n > 1 ? "s restent" : " reste"} sans réponse.` : "."}`}</p>
+    ${simEntry ? "" : `<a href="#amisBox" id="toAmis" class="btn amis-cta">Comparer mes résultats avec un proche ↓</a>`}
   </header>
   <section class="facts four">${docs.length ? `<div class="fact"><span class="eyebrow">Doctrine</span><b style="font-size:1.25rem">${esc(docs[0].c.nom)}</b><span class="muted small tnum">${Math.round(docs[0].m.score * 100)} % · ${esc(docs[0].c.famille)}</span></div>` : ""}${tops}</section>
   ${THEMES.length ? `<section class="summary" style="display:grid;gap:10px">
@@ -1099,6 +1105,7 @@ function renderResults() {
   };
   app.querySelectorAll("[data-amicmp]").forEach(b => b.onclick = () => { state.amisOpen = true; state.compareId = b.dataset.amicmp; renderResults(); });
   app.querySelectorAll("[data-amidel]").forEach(b => b.onclick = () => { const amis = loadAmis(); amis.splice(+b.dataset.amidel, 1); saveAmis(amis); if (String(state.compareId).startsWith("ami:")) state.compareId = ""; state.amisOpen = true; renderResults(); });
+  const toAmis = document.getElementById("toAmis"); if (toAmis) toAmis.onclick = e => { e.preventDefault(); const s = document.getElementById("amisBox"); if (s) s.scrollIntoView({ behavior: "smooth", block: "start" }); };
   const toCmp = document.getElementById("toCmp"); if (toCmp) toCmp.onclick = e => { e.preventDefault(); const s = document.getElementById("comparer"); if (s) s.scrollIntoView({ behavior: "smooth" }); const i = document.getElementById("cmpIn"); if (i) setTimeout(() => i.focus({ preventScroll: true }), 400); };
   const more27 = document.getElementById("more27"); if (more27) more27.onclick = () => { state.showAll27 = !state.showAll27; renderResults(); };
   app.querySelectorAll("details.axis").forEach(d => d.addEventListener("toggle", () => {
