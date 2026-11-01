@@ -1,3 +1,7 @@
+<!doctype html>
+<html lang="fr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Atlas des convictions</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -41,8 +45,9 @@ body {
   padding-right: max(16px, env(safe-area-inset-right, 0px));
   padding-block: 28px 64px;
 }
-.wrap { max-width: 760px; margin: 0 auto; display: grid; gap: 28px; }
+.wrap { max-width: 760px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
 .wrap.wide { max-width: 980px; }
+select { max-width: 100%; min-width: 0; }
 h1, h2, h3 { font-family: var(--font-display); font-weight: 600; text-wrap: balance; margin: 0; line-height: 1.15; }
 h1 { font-size: clamp(2.1rem, 6vw, 3.2rem); letter-spacing: -0.01em; }
 h2 { font-size: clamp(1.45rem, 3.6vw, 1.9rem); }
@@ -72,13 +77,13 @@ button:focus-visible, summary:focus-visible, select:focus-visible { outline: 2px
 @media (max-width: 560px) { .facts { grid-template-columns: 1fr; } }
 .fact { border-top: 2px solid var(--ink); padding-top: 8px; }
 .fact b { display: block; font-family: var(--font-display); font-size: 1.6rem; font-weight: 600; }
-.atlas { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px 22px; }
+.atlas { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 18px 22px; }
 .fam h3 { font-size: 1.05rem; margin-bottom: 6px; display: flex; gap: 8px; align-items: baseline; }
 .fam h3 span { font-family: var(--font-body); font-size: 0.75rem; color: var(--muted); font-weight: 500; }
 .fam ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; font-size: 0.86rem; color: var(--muted); }
 .fam li b { color: var(--ink); font-weight: 600; }
 .notice { background: var(--accent-soft); border-radius: var(--radius); padding: 14px 16px; font-size: 0.92rem; }
-.demo { display: grid; gap: 10px; }
+.demo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .demo select { font: inherit; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); max-width: 100%; }
 
 /* ---------- Questionnaire ---------- */
@@ -152,7 +157,7 @@ details.aide p { margin-top: 6px; }
 .match.open .chev { transform: rotate(90deg); }
 .mbody { padding: 0 14px 16px; display: grid; gap: 14px; border-top: 1px solid var(--line); padding-top: 14px; }
 .mbody ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: 0.92rem; }
-.agreegrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.agreegrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 14px; }
 .agreegrid h4 { margin: 0 0 6px; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .agreegrid li { font-size: 0.88rem; }
 .far { margin-top: 6px; }
@@ -664,11 +669,13 @@ function load() {
       for (const id of Object.keys(state.answers)) if (!qids.has(id)) delete state.answers[id];
       for (const id of Object.keys(state.stars)) if (!qids.has(id)) delete state.stars[id];
       if (from < VERSION) save();
+      if (!state.notice && s.view === "results" && answeredCount(state.answers) >= 45) state.view = "results";
+      else if (!state.notice && s.view === "quiz") state.view = "quiz";
     }
   } catch (e) { /* stockage indisponible : on continue sans */ }
 }
 function save() {
-  try { localStorage.setItem(KEY, JSON.stringify({ v: VERSION, answers: state.answers, stars: state.stars, idx: state.idx, onlyNew: state.onlyNew })); } catch (e) {}
+  try { localStorage.setItem(KEY, JSON.stringify({ v: VERSION, answers: state.answers, stars: state.stars, idx: state.idx, onlyNew: state.onlyNew, view: state.sim ? "results" : state.view })); } catch (e) {}
 }
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const answeredCount = ans => Object.values(ans).filter(v => v !== undefined).length;
@@ -723,7 +730,23 @@ function poleText(i, v) {
 
 /* ---------- Rendu ---------- */
 const app = document.getElementById("app");
+// Historique : chaque changement de vue crée une entrée, pour que le bouton Retour du navigateur
+// revienne à la vue précédente au lieu de quitter la page.
+let lastViewKey = null, fromPop = false;
+window.addEventListener("popstate", e => {
+  const h = e.state; if (!h || !h.view) return;
+  state.view = h.view; state.sim = h.sim || null;
+  if (state.view === "results" && !state.sim && answeredCount(state.answers) < 45) state.view = "intro";
+  fromPop = true; render(); window.scrollTo(0, 0);
+});
 function render() {
+  const key = state.view + "|" + (state.sim || "");
+  try {
+    if (lastViewKey === null) history.replaceState({ view: state.view, sim: state.sim }, "");
+    else if (key !== lastViewKey && !fromPop) history.pushState({ view: state.view, sim: state.sim }, "");
+  } catch (e) {}
+  lastViewKey = key; fromPop = false;
+  save();
   app.classList.toggle("wide", state.view === "results");
   if (state.view === "quiz") renderQuiz(); else if (state.view === "results") renderResults(); else renderIntro();
 }
@@ -750,8 +773,8 @@ function renderIntro() {
   ${state.notice ? `<div class="notice">${esc(state.notice)}</div>` : ""}
   ${n ? `<div class="notice">Vous avez répondu à <b class="tnum">${n}</b> affirmations sur ${QUESTIONS.length}. Vos réponses sont conservées dans ce navigateur.</div>` : ""}
   <div class="row">
-    <button class="btn" id="start">${n ? (n < QUESTIONS.length ? `Compléter les ${QUESTIONS.length - n} affirmations restantes` : "Revoir le questionnaire") : "Commencer"}</button>
-    ${n >= 45 ? `<button class="btn ghost" id="toRes">Voir mes résultats</button>` : ""}
+    ${n >= 45 ? `<button class="btn" id="toRes">Voir mes résultats</button>` : ""}
+    <button class="btn${n >= 45 ? " ghost" : ""}" id="start">${n ? (n < QUESTIONS.length ? `Compléter les ${QUESTIONS.length - n} affirmations restantes` : "Revoir le questionnaire") : "Commencer"}</button>
   </div>
   <p class="small muted">Pour chaque affirmation, sept degrés d'accord. « Sans avis » et « La question ne me convient pas » ne sont pas comptés ; le second signale une affirmation dont vous récusez la prémisse. Marquez d'une étoile les sujets qui comptent le plus pour vous : ils pèseront davantage dans les comparaisons. Catalogue actuel : ${counts}, dont ${DATA.p2027.length} personnalités de la présidentielle 2027.</p>
   <section style="display:grid;gap:16px"><h2>Les ${AXES.length} axes</h2><div class="atlas">${fams}</div></section>
@@ -878,7 +901,7 @@ function encodeAnswers(answers, stars) {
   return `ATLAS-${QSIG}-${b64}`;
 }
 function decodeAnswers(code) {
-  const m = String(code || "").trim().match(/^ATLAS-([a-z0-9]+)-([A-Za-z0-9_-]+)$/);
+  const m = String(code || "").replace(/\s+/g, "").match(/^ATLAS-([a-z0-9]+)-([A-Za-z0-9_-]+)$/);
   if (!m) return { error: "Ce code n'est pas reconnu." };
   if (m[1] !== QSIG) return { error: "Ce code vient d'une version précédente du questionnaire : demandez à votre proche de recopier son code depuis la version actuelle." };
   let bin; try { bin = atob(m[2].replace(/-/g, "+").replace(/_/g, "/")); } catch (e) { return { error: "Ce code est incomplet." }; }
@@ -1123,7 +1146,7 @@ function renderResults() {
   const rn = document.getElementById("resetNo"); if (rn) rn.onclick = () => { state.confirmReset = false; renderResults(); };
   const ry = document.getElementById("resetYes"); if (ry) ry.onclick = () => { state.answers = {}; state.stars = {}; state.idx = 0; state.confirmReset = false; state.view = "intro"; save(); render(); window.scrollTo(0, 0); toast("Réponses effacées"); };
   const cp = document.getElementById("copy"); if (cp) cp.onclick = () => copySummary(prof, scored, strong, rejected);
-  const pdfBtn = document.getElementById("pdf"); if (pdfBtn) pdfBtn.onclick = () => exportPDF(pdfBtn, { prof, scored, docs, strong, rejected, p27, expr, nx, nr });
+  const pdfBtn = document.getElementById("pdf"); if (pdfBtn) pdfBtn.onclick = () => exportPDF(pdfBtn, { prof, scored, docs, strong, rejected, p27, expr, nx, nr, code: simEntry ? null : encodeAnswers(state.answers, state.stars) });
 }
 
 function axisQuestionsHTML(axisId) {
@@ -1243,7 +1266,7 @@ async function exportPDF(btn, R) {
   } finally { btn.disabled = false; btn.textContent = label; }
 }
 function buildPDF(jsPDF, R) {
-  const { prof, scored, docs, strong, rejected, p27, expr, nx, nr } = R;
+  const { prof, scored, docs, strong, rejected, p27, expr, nx, nr, code } = R;
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = 210, H = 297, M = 18, CW = W - 2 * M;
   const C = { ink: [22, 32, 48], muted: [88, 99, 116], line: [207, 214, 223], a: [42, 114, 118], b: [161, 92, 34] };
@@ -1281,6 +1304,24 @@ function buildPDF(jsPDF, R) {
   font("helvetica", "normal", 10); col(C.muted);
   doc.text(pdfText(`Résultats du ${new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}`), M, y + 4); y += 6;
   para(`Calculé sur ${expr} réponse${expr > 1 ? "s" : ""} exprimée${expr > 1 ? "s" : ""}${nx ? `, ${nx} sans avis` : ""}${nr ? `, ${nr} récusée${nr > 1 ? "s" : ""}` : ""}, sur ${QUESTIONS.length} affirmations et ${AXES.length} axes.`, 9, C.muted);
+
+  // Code de partage
+  if (code) {
+    const SITE = "https://quizpolitiques.github.io/atlas-des-convictions/";
+    const chunks = code.match(/.{1,84}/g);
+    const bh = 20 + chunks.length * 4;
+    y += 4; need(bh);
+    doc.setDrawColor(163, 58, 44); doc.setLineWidth(0.6); doc.roundedRect(M, y, CW, bh, 2, 2, "S");
+    font("helvetica", "bold", 10); doc.setTextColor(163, 58, 44); doc.text("Mon code de partage", M + 4, y + 6);
+    font("courier", "normal", 8.5); col(C.ink);
+    chunks.forEach((l, k) => doc.text(l, M + 4, y + 11.5 + k * 4));
+    font("helvetica", "normal", 7.5); col(C.muted);
+    const yy = y + 11.5 + chunks.length * 4 + 1.5;
+    doc.text(pdfText("Pour vous comparer, un proche colle ce code, en entier, dans la rubrique Comparer de ses résultats, sur"), M + 4, yy);
+    doc.text(pdfText("le site de l'Atlas des convictions :"), M + 4, yy + 3.5);
+    doc.setTextColor(29, 78, 137); doc.textWithLink(SITE, M + 4 + doc.getTextWidth(pdfText("le site de l'Atlas des convictions : ")), yy + 3.5, { url: SITE });
+    y += bh + 2;
+  }
 
   // Correspondances principales
   const tiles = [];
