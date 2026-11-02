@@ -782,6 +782,7 @@ function renderIntro() {
     ${n >= 45 ? `<button class="btn" id="toRes">Voir mes résultats</button>` : ""}
     <button class="btn${n >= 45 ? " ghost" : ""}" id="start">${n ? (n < QUESTIONS.length ? `Compléter les ${QUESTIONS.length - n} affirmations restantes` : "Revoir le questionnaire") : "Commencer"}</button>
   </div>
+  ${n ? `<div class="row">${restartHTML()}</div>` : ""}
   <p class="small muted">Pour chaque affirmation, sept degrés d'accord. « Sans avis » et « La question ne me convient pas » ne sont pas comptés ; le second signale une affirmation dont vous récusez la prémisse. Marquez d'une étoile les sujets qui comptent le plus pour vous : ils pèseront davantage dans les comparaisons. Catalogue actuel : ${counts}, dont ${DATA.p2027.length} personnalités de la présidentielle 2027.</p>
   <section style="display:grid;gap:16px"><h2>Les ${AXES.length} axes</h2><div class="atlas">${fams}</div></section>
   ${n ? `<details class="aide"><summary>Mon lien pour reprendre plus tard ou sur un autre appareil</summary><div style="margin-top:10px">${repriseHTML()}</div></details>` : ""}
@@ -804,12 +805,27 @@ function renderIntro() {
     state.answers = d.answers; state.stars = d.stars; state.notice = ""; state.view = answeredCount(d.answers) >= 45 ? "results" : "intro"; save(); render(); window.scrollTo(0, 0); toast("Réponses restaurées");
   };
   bindReprise();
+  bindRestart(renderIntro);
   const tr = document.getElementById("toRes"); if (tr) tr.onclick = () => { state.view = "results"; state.sim = null; render(); window.scrollTo(0, 0); };
   document.getElementById("simGo").onclick = () => {
     const id = document.getElementById("simSel").value; state.sim = id; state.view = "results"; state.openMatch = null; render(); window.scrollTo(0, 0);
   };
 }
 
+// Recommencer à zéro, avec confirmation (accueil et questionnaire)
+function restartHTML() {
+  return state.confirmRestart
+    ? `<div class="notice" style="display:grid;gap:8px"><span>Toutes vos réponses seront effacées de ce navigateur. Pour pouvoir les retrouver, copiez d'abord votre lien de reprise.</span><div class="row"><button class="btn danger" id="restartYes">Effacer et recommencer</button><button class="btn quiet" id="restartNo">Annuler</button></div></div>`
+    : `<button class="btn quiet small" id="restart">Recommencer le test depuis le début</button>`;
+}
+function bindRestart(rerender) {
+  const r = document.getElementById("restart"); if (r) r.onclick = () => { state.confirmRestart = true; rerender(); };
+  const n = document.getElementById("restartNo"); if (n) n.onclick = () => { state.confirmRestart = false; rerender(); };
+  const y = document.getElementById("restartYes"); if (y) y.onclick = () => {
+    state.answers = {}; state.stars = {}; state.idx = 0; state.onlyNew = false; state.confirmRestart = false; state.repriseOpen = false; state.notice = "";
+    trail = []; ahead = []; state.view = "quiz"; save(); render(); window.scrollTo(0, 0); toast("Réponses effacées : le test recommence");
+  };
+}
 const unanswered = () => QUESTIONS.filter(q => state.answers[q.id] === undefined).length;
 function startQuiz(onlyNew) {
   state.onlyNew = !!onlyNew && unanswered() > 0; trail = []; ahead = [];
@@ -862,6 +878,7 @@ function renderQuiz() {
   <div class="row" style="justify-content:center"><button class="btn ghost small" id="modeToggle">${state.onlyNew ? "Parcourir toutes les affirmations" : (unanswered() && n ? `Aller aux ${unanswered()} affirmations sans réponse` : "")}</button></div>
   <div class="row" style="justify-content:center"><button class="btn ghost" id="res">${n >= 45 ? "Voir mes résultats" : "Retour à l'accueil"}</button>${n ? `<button class="btn ghost" id="pause" aria-expanded="${!!state.repriseOpen}">Faire une pause et reprendre plus tard</button>` : ""}</div>
   ${n && state.repriseOpen ? repriseHTML() : ""}
+  ${n ? `<div class="row" style="justify-content:center">${restartHTML()}</div>` : ""}
   <p class="kbd">Clavier : touches 1 à 7 pour répondre (1 = tout à fait d'accord), 0 pour « Sans avis », 9 pour « La question ne me convient pas », E pour l'étoile, flèches pour naviguer.</p>`;
   app.querySelectorAll(".dot").forEach(b => b.onclick = () => answer(+b.dataset.v));
   document.getElementById("skip").onclick = () => answer("x");
@@ -869,6 +886,7 @@ function renderQuiz() {
   document.getElementById("star").onclick = toggleStar;
   const pz = document.getElementById("pause"); if (pz) pz.onclick = () => { state.repriseOpen = !state.repriseOpen; renderQuiz(); if (state.repriseOpen) { const bx = document.getElementById("repriseBox"); if (bx) bx.scrollIntoView({ block: "center" }); } };
   bindReprise();
+  bindRestart(renderQuiz);
   document.getElementById("prev").onclick = () => go(-1);
   document.getElementById("next").onclick = () => go(1);
   document.getElementById("res").onclick = () => { state.view = n >= 45 ? "results" : "intro"; state.sim = null; render(); window.scrollTo(0, 0); };
